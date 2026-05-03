@@ -1,0 +1,21 @@
+
+services:
+  backend:
+    build: ./backend
+    container_name: vulnscanner-backend
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+
+  frontend:
+    build: ./frontend
+    container_name: vulnscanner-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
