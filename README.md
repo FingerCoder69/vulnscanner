@@ -1,143 +1,159 @@
 # VulnScanner
 
-A full-stack network vulnerability scanner with a real-time dark-themed dashboard.
-
-**Pipeline:** Port scan → Service fingerprinting → CVE enrichment → Live UI
+A full-stack security testing platform that combines **network vulnerability scanning** with an AI-powered **DAST (Dynamic Application Security Testing)** engine. Built with Python, FastAPI, React, and Claude AI.
 
 ---
 
-## Stack
+## Features
 
-| Layer | Tech |
+### 🔍 Network Scanner
+- High-performance TCP port scanner using 100 concurrent threads
+- Service fingerprinting via banner grabbing
+- Automatic CVE lookup against the NIST NVD database
+- Real-time port discovery streamed live to the dashboard
+- **AI Analysis** — click to get Claude's risk summary, exploit scenario, and fix recommendation for any finding
+
+### ⚡ DAST Scanner
+- Actively probes web applications for OWASP Top 10 vulnerabilities
+- Checks for SQL Injection, XSS, CORS misconfigurations, open redirects, and exposed sensitive paths
+- Checks for missing security headers (CSP, HSTS, X-Frame-Options, etc.)
+- **AI Triage** — Claude automatically explains each finding, rates exploitability, and suggests targeted payloads
+- **AI Pentest Report** — generates a full executive + technical report on demand
+
+### 🖥️ Dashboard
+- Unified React dashboard with tab-based interface for both scan modes
+- Real-time terminal output streamed over WebSockets
+- Severity-coded findings (CRITICAL / HIGH / MEDIUM / LOW)
+- Summary stats bar with CVE and finding counts
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
 |---|---|
-| Frontend | React 18 + Vite, served via Nginx |
-| Backend | Python 3.11 + FastAPI + WebSockets |
-| Deployment | Docker + docker-compose |
+| Backend | Python 3, FastAPI, WebSockets |
+| Scanner | Raw TCP sockets, threading, NVD REST API |
+| DAST Engine | Python stdlib (`urllib`, `socket`, `re`) |
+| AI | Anthropic Claude API (`claude-sonnet-4`) |
+| Frontend | React.js, inline CSS |
+| Container | Docker, Docker Compose |
 
 ---
 
-## Quick start
-
-### Prerequisites
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
-
-### Run (one command)
-
-```bash
-git clone https://github.com/YOUR_USERNAME/vulnscanner.git
-cd vulnscanner
-docker-compose up --build
-```
-
-Then open **http://localhost** in your browser.
-
-To stop:
-```bash
-docker-compose down
-```
-
----
-
-## Development (no Docker)
-
-### Backend
-
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Frontend runs on **http://localhost:5173**, backend on **http://localhost:8000**.
-
-> The `.env` file already points the WebSocket at `localhost:8000` for local dev.
-
----
-
-## How it works
-
-### Backend pipeline (`/ws/scan` WebSocket)
-
-The frontend opens a WebSocket connection and sends a JSON scan request. The backend streams events back in real time:
-
-| Event | Payload | Meaning |
-|---|---|---|
-| `start` | scan_id, target, port_range | Scan initiated |
-| `log` | message | Progress log line |
-| `port_found` | port | Open port discovered |
-| `done` | full results object | Pipeline complete |
-| `error` | message | Something went wrong |
-
-**Stage 1 — Port scanner (`scanner.py`)**
-Raw TCP `connect_ex()` scan across the port range, parallelised with a 100-thread pool using `threading.Queue`. A callback fires on every open port discovery so the UI can update live.
-
-**Stage 2 — Fingerprinting (`fingerprint.py`)**
-Banner grabbing via raw sockets. Probes known protocols (HTTP, SSH, FTP, SMTP) with appropriate payloads to extract version strings.
-
-**Stage 3 — CVE lookup (`cve_lookup.py`)**
-Queries the [NIST NVD REST API v2.0](https://nvd.nist.gov/developers/vulnerabilities) with keywords mapped from detected service names. Results sorted by CVSS severity. A 0.7s inter-request delay respects NVD's unauthenticated rate limit.
-
-### Frontend
-
-Built in React with a terminal-style dark UI. The `App.jsx` manages the WebSocket lifecycle. As events arrive:
-- `port_found` events update a live ticker showing discovered ports in real time
-- `log` events stream into a macOS-style terminal pane
-- `done` renders the full findings: summary stats bar + per-port CVE cards
-
----
-<img width="1846" height="1029" alt="Screenshot 2026-04-08 205130" src="https://github.com/user-attachments/assets/88af7400-0e3f-4615-bf56-aaff6dfd8f47" />
-
-<img width="1836" height="1026" alt="Screenshot 2026-04-08 205155" src="https://github.com/user-attachments/assets/24db45a6-7210-475e-b8fe-5eb9af730f32" />
-
-## Project structure
+## Project Structure
 
 ```
 vulnscanner/
-├── docker-compose.yml
-├── .gitignore
-├── README.md
 ├── backend/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── main.py          ← FastAPI app + WebSocket endpoint
-│   ├── scanner.py       ← TCP port scanner
-│   ├── fingerprint.py   ← Banner grabbing + service ID
-│   └── cve_lookup.py    ← NIST NVD API integration
-└── frontend/
-    ├── Dockerfile        ← Multi-stage: Vite build → Nginx
-    ├── nginx.conf        ← Serves React + proxies /ws/ to backend
-    ├── package.json
-    ├── vite.config.js
-    ├── index.html
-    └── src/
-        ├── main.jsx
-        ├── index.css
-        ├── App.jsx                   ← WebSocket logic + layout
-        └── components/
-            ├── ScanForm.jsx          ← Target input + port range
-            ├── Terminal.jsx          ← Live log stream
-            ├── PortCard.jsx          ← Per-port CVE findings
-            └── SummaryBar.jsx        ← Scan stats dashboard
+│   ├── main.py           # FastAPI app, WebSocket routes, AI endpoint
+│   ├── scanner.py        # TCP port scanner (100-thread pool)
+│   ├── fingerprint.py    # Banner grabbing + service identification
+│   ├── cve_lookup.py     # NVD API integration
+│   ├── dast_scanner.py   # DAST engine (SQLi, XSS, CORS, headers...)
+│   ├── ai_analysis.py    # Claude API integration
+│   └── requirements.txt
+├── frontend/
+│   └── src/
+│       ├── App.jsx
+│       └── components/
+│           ├── ScanForm.jsx
+│           ├── DASTForm.jsx
+│           ├── PortCard.jsx
+│           ├── DASTFindingCard.jsx
+│           ├── SummaryBar.jsx
+│           ├── Terminal.jsx
+│           └── AIReport.jsx
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+└── .gitignore
 ```
 
 ---
 
-## Ethical use
+## Getting Started
 
-Only scan hosts you own or have explicit written permission to test.
+### Prerequisites
+- Docker + Docker Compose
+- Anthropic API key → [console.anthropic.com](https://console.anthropic.com)
 
-`scanme.nmap.org` is provided by the Nmap project for legal scan testing.
+### Setup
+
+**1. Clone the repo**
+```bash
+git clone https://github.com/FingerCoder69/vulnscanner.git
+cd vulnscanner
+```
+
+**2. Add your API key**
+```bash
+cp .env.example .env
+# Edit .env and add your key:
+# ANTHROPIC_API_KEY=sk-ant-...
+```
+
+**3. Run**
+```bash
+docker-compose up --build
+```
+
+**4. Open**
+- Frontend: [http://localhost:5173](http://localhost:5173)
+- Backend: [http://localhost:8000](http://localhost:8000)
+- Health check: [http://localhost:8000/health](http://localhost:8000/health)
 
 ---
 
-## License
+## Usage
 
-MIT
+### Network Scanner
+1. Enter a target hostname or IP (e.g. `scanme.nmap.org`)
+2. Set port range (default: 1–1024)
+3. Click **Run Scan**
+4. Once results load, click **✦ AI Analyse** on any port to get Claude's assessment
+
+### DAST Scanner
+1. Switch to the **DAST + AI** tab
+2. Enter a target URL (e.g. `https://httpbin.org`)
+3. Enable **AI Triage** and/or **Generate pentest report**
+4. Click **Run DAST**
+
+> ⚠️ Only scan targets you own or have explicit written permission to test.
+
+### Legal Test Targets
+| Target | Purpose |
+|---|---|
+| `scanme.nmap.org` | Network scan (officially permitted by Nmap) |
+| `https://httpbin.org` | DAST headers and CORS checks |
+| `http://zero.webappsecurity.com` | DAST general web checks |
+
+---
+
+## AI Integration
+
+VulnScanner uses the **Anthropic Claude API** for three AI features:
+
+| Feature | Where | What it does |
+|---|---|---|
+| Port AI Analysis | Network Scanner → PortCard | Risk summary, exploit scenario, fix, attacker commands |
+| Finding Triage | DAST → each finding | Explains vulnerability, rates exploitability, next payloads |
+| Pentest Report | DAST → summary | Executive summary, risk rating, immediate actions |
+
+All AI calls are proxied through the backend — your API key is never exposed to the browser.
+
+---
+
+## Environment Variables
+
+| Variable | Description |
+|---|---|
+| `ANTHROPIC_API_KEY` | Your Anthropic API key |
+
+Copy `.env.example` to `.env` and fill in your key. Never commit `.env` to version control.
+
+---
+
+## ⚠️ Disclaimer
+
+VulnScanner is built for **authorized security testing and educational purposes only**. Scanning systems without explicit permission is illegal. The authors take no responsibility for misuse.
